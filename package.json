@@ -1,0 +1,23 @@
+{
+  "name": "fasti-cmdb",
+  "version": "1.0.0",
+  "description": "fast cmdb service for dynamic configure server",
+  "main": "./src/server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node ./src/server.js",
+    "start": "yarn dev"
+  },
+  "author": "Kevin",
+  "license": "MIT",
+  "dependencies": {
+    "extend": ">=3.0.2",
+    "fastify": ">=3.14.2",
+    "fastify-plugin": ">=3.0.0",
+    "fastify-routes": ">=3.0.0",
+    "pino-pretty": "^4.7.1"
+  },
+  "devDependencies": {
+    "eslint": ">=7.23.0"
+  }
+}
