@@ -179,8 +179,6 @@ class Db {
         _arr.splice(index, 1);
       });
 
-      console.log(_arr);
-
       _arr.forEach((el) => {
         newRows.push(el);
         this._rows.push(el);
