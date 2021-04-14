@@ -1,44 +1,33 @@
-"use strict";
+/* eslint-disable import/no-unresolved */
+/* eslint-disable no-console */
+/* eslint-disable no-underscore-dangle */
+/* eslint-disable no-param-reassign */
 
 // 在 ax1/a1-database 库的基础上修复了一些bug
-
-module.exports = {
-  connect,
-  disconnect,
-};
-
-const fs = require("fs/promises");
-const path = require("path");
-
 // extend库是jQuery的extend()方法移植到NodeJS上的实现，支持对象的递归深度拷贝
-var extend = require("extend");
+const extend = require('extend');
+
+const fs = require('fs/promises');
+const path = require('path');
 
 const dbs = [];
 
-/**
- * Connect to a database
- * @param {String} filePath absolute or relative path to db. If not exists, create file
- * @returns {Db}
- */
-async function connect(filePath) {
-  let db = dbs[filePath];
-  if (!db) {
-    let realPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(process.cwd(), filePath);
-    db = new Db(realPath);
-    await db.load();
-  } else {
-    if (db.isOpen) throw new Error("database " + filePath + " is already open");
-  }
-  return db;
+async function clone(el) {
+  return JSON.parse(JSON.stringify(el));
 }
 
-async function disconnect(db) {
-  const pos = dbs.indexOf(db._filePath);
-  dbs.splice(pos, 1);
-  await db._destroy();
-  db = null;
+async function sleep(millis) {
+  return new Promise((resolve) => setTimeout(resolve, millis));
+}
+
+/**
+ * Format row. Note: to allow also parsing raw JSON lines (historical data files,logs,etc),
+ * the 'save' action is removed
+ */
+function toText(action, json) {
+  const prefix = action === 'delete' ? `${action}|` : '';
+  const text = json.charAt ? json : JSON.stringify(json);
+  return `${prefix}${text}\n`;
 }
 
 class Db {
@@ -62,7 +51,9 @@ class Db {
   }
 
   async find(filter) {
-    return this._clone(this._rows.filter(filter));
+    const search = this._rows.filter(filter);
+    const result = await clone(search);
+    return result;
   }
 
   /**
@@ -77,10 +68,13 @@ class Db {
     if (!Array.isArray(arr)) arr = [arr];
 
     arr.forEach((el) => {
-      if (el.id != null && this._rows.find((row) => el.id === row.id))
-        throw Error("Duplicated id: " + el.id);
+      if (el.id != null && this._rows.find((row) => el.id === row.id)) {
+        throw Error(`Duplicated id: ${el.id}`);
+      }
     });
-    return await this._save(arr);
+
+    const result = await this._save(arr);
+    return result;
   }
 
   /**
@@ -93,7 +87,9 @@ class Db {
 
     const ids = arr.filter((el) => el.id != null).map((el) => el.id);
     const filter = ids.length > 0 ? (el) => ids.includes(el.id) : undefined;
-    return await this._save(arr, filter);
+
+    const result = await this._save(arr, filter);
+    return result;
   }
 
   /**
@@ -107,25 +103,29 @@ class Db {
     if (!filter) {
       const ids = arr.filter((el) => el.id != null).map((el) => el.id);
       ids.forEach((id) => {
-        if (this._rows.find((row) => id === row.id) === undefined)
-          throw Error(
-            "id: " + id + "is not in database. Use insert, or upsert instead."
-          );
+        if (this._rows.find((row) => id === row.id) === undefined) {
+          throw Error(`id: ${id} is not in database. Use insert, or upsert instead.`);
+        }
       });
       filter = (el) => ids.includes(el.id);
     }
 
-    return await this._save(arr, filter);
+    const result = await this._save(arr, filter);
+
+    return result;
   }
+
   /**
-   * Save an item or an array of items into the database. Filter is optional .This is similar to a SQL UPSERT operation
+   * Save an item or an array of items into the database.
+   * Filter is optional .This is similar to a SQL UPSERT operation
    * @param {Array|Object} arr the object or the array of objects to be stored
    * @param {Function} filter? Elements to be deleted
    * @returns {number} the net number of items added - items deleted
    */
   async save(arr, filter) {
     // if own filter, use it
-    return filter ? await this._save(arr, filter) : await this.upsert(arr);
+    const result = filter ? await this._save(arr, filter) : await this.upsert(arr);
+    return result;
   }
 
   /**
@@ -134,8 +134,9 @@ class Db {
    * @param {*} filter
    */
   async _save(arr, filter) {
-    this._counter++;
-    let _arr = this._clone(arr); // clone because arr could change when this async function is waiting for persist event
+    this._counter += 1;
+    // clone because arr could change when this async function is waiting for persist event
+    let _arr = clone(arr);
     if (!Array.isArray(arr)) _arr = [arr];
 
     if (this._mustCompact()) await this._compactDB();
@@ -143,8 +144,8 @@ class Db {
     // excute sync operations (next entries to this method will have the latest _rows)
     let countDeleted = 0;
     let oldRows = [];
-    let newRows = [];
     let selected = [];
+    const newRows = [];
 
     if (filter) {
       oldRows = this._rows.filter(filter);
@@ -166,11 +167,11 @@ class Db {
     let p2 = [];
     let p3 = [];
     if (countDeleted > 0 && selected.length > 0) {
-      p1 = oldRows.map((el) => this._persist("delete", el));
+      p1 = oldRows.map((el) => this._persist('delete', el));
     }
 
-    if (countDeleted == 0 || newRows.length == oldRows.length) {
-      p2 = newRows.map((el) => this._persist("save", el));
+    if (countDeleted === 0 || newRows.length === oldRows.length) {
+      p2 = newRows.map((el) => this._persist('save', el));
     }
 
     if (selected.length > 0 && _arr.length > selected.length) {
@@ -184,9 +185,9 @@ class Db {
         this._rows.push(el);
       });
 
-      p2 = newRows.filter(filter).map((el) => this._persist("save", el));
+      p2 = newRows.filter(filter).map((el) => this._persist('save', el));
 
-      p3 = _arr.map((el) => this._persist("save", el));
+      p3 = _arr.map((el) => this._persist('save', el));
     }
 
     await Promise.all([...p1, ...p2, ...p3]);
@@ -194,7 +195,7 @@ class Db {
   }
 
   async delete(filter) {
-    this._counter++;
+    this._counter += 1;
     if (this._mustCompact()) await this._compactDB();
 
     const arr = this._rows.filter(filter);
@@ -202,71 +203,67 @@ class Db {
       const index = this._rows.indexOf(el);
       if (index >= 0) this._rows.splice(index, 1);
     });
-    await Promise.all([arr.map((el) => this._persist("delete", el))]);
+    await Promise.all([arr.map((el) => this._persist('delete', el))]);
     return arr.length;
   }
 
   async _persist(action, json) {
-    // stop the world while the database is still writing or compacting, but set a timeout to warn when the persist time is too long
+    // stop the world while the database is still writing or compacting,
+    // but set a timeout to warn when the persist time is too long
 
-    /* DISABLE TO SEE if corruption problems are in this phase (ie: two persist at the same time or similar)
+    /* DISABLE TO SEE if corruption problems are in this phase
+    (ie: two persist at the same time or similar)
     let t1 = null //note: do not init time here to speedup the function
     while (this._lock) {
       if (!t1) t1 = Date.now()
       await sleep(100)
-      if (Date.now() - t1 > 10000) throw Error('a1-database: CRITICAL developer error or the file database is too big. The db was locked (compacting) for more than 10 seconds while a persist operation was requested')
-    }*/
-    while (this._lock) {
-      await sleep(1000);
+      if (Date.now() - t1 > 10000) {
+        throw Error('a1-database: CRITICAL developer error or the file database is too big.
+        The db was locked (compacting) for more than 10 seconds
+        while a persist operation was requested')
+      }
     }
-    await this._file.write(this._toText(action, json));
+    */
+    while (this._lock) {
+      sleep(1000);
+    }
+    await this._file.write(toText(action, json));
   }
 
   async _loadFile() {
     if (this._file) await this._file.close();
 
-    let content = "";
+    let content = '';
 
     // access file
     try {
-      content = await fs.readFile(this._filePath, "utf-8");
+      content = await fs.readFile(this._filePath, 'utf-8');
     } catch (err) {
-      if (err.code === "ENOENT") {
+      if (err.code === 'ENOENT') {
         try {
           await fs.mkdir(path.dirname(this._filePath));
         } catch (e) {
-          console.log("folder already exists");
+          console.log('folder already exists');
         }
         await fs.writeFile(this._filePath, content);
       } else throw err;
     }
 
     // load content into memory
-    const DEL = "delete|";
-    const arr = content.split("\n").filter((el) => el != "");
+    const DEL = 'delete|';
+    const arr = content.split('\n').filter((el) => el !== '');
     const set = new Set(); // first into a set to remove duplicated
-    arr.forEach((el) =>
-      el.startsWith(DEL) ? set.delete(el.substring(DEL.length)) : set.add(el)
-    );
-    set.delete("");
+    arr.forEach((el) => (el.startsWith(DEL) ? set.delete(el.substring(DEL.length)) : set.add(el)));
+    set.delete('');
     set.forEach((el) => {
-      const isArray = el.startsWith("[") && el.endsWith("]");
-      const isObject = el.startsWith("{") && el.endsWith("}");
+      const isArray = el.startsWith('[') && el.endsWith(']');
+      const isObject = el.startsWith('{') && el.endsWith('}');
       const obj = isArray || isObject ? JSON.parse(el) : el;
       this._rows.push(obj);
     });
 
     // set the file as open
-    this._file = await fs.open(this._filePath, "a+");
-  }
-
-  /**
-   * Format row. Note: to allow also parsing raw JSON lines (historical data files,logs,etc), the 'save' action is removed
-   */
-  _toText(action, json) {
-    const prefix = action === "delete" ? action + "|" : "";
-    const text = json.charAt ? json : JSON.stringify(json);
-    return prefix + text + "\n";
+    this._file = await fs.open(this._filePath, 'a+');
   }
 
   /**
@@ -274,15 +271,13 @@ class Db {
    */
   async _compactDB() {
     // clean rows (remove duplicated) in the in_memory database (RAM)
-    let elements = this._rows.map((el) =>
-      el.charAt ? el : JSON.stringify(el)
-    );
+    let elements = this._rows.map((el) => (el.charAt ? el : JSON.stringify(el)));
     const set = new Set(elements);
     elements = [...set];
-    const content = elements.reduce((acc, el) => acc + el + "\n", "");
+    const content = elements.reduce((acc, el) => `${acc}${el}\n`, '');
 
     // create a backup file before compacting
-    await fs.writeFile(this._filePath + ".bak.db", content);
+    await fs.writeFile(`${this._filePath}.bak.db`, content);
 
     // replace the database with clean content
     try {
@@ -290,10 +285,10 @@ class Db {
       if (this._file) await this._file.close();
 
       await fs.writeFile(this._filePath, content);
-      this._file = await fs.open(this._filePath, "a+");
+      this._file = await fs.open(this._filePath, 'a+');
       this._counter = 0;
       // everythingok, remove bak file
-      fs.unlink(this._filePath + ".bak.db");
+      fs.unlink(`${this._filePath}.bak.db`);
     } finally {
       this._lock = false;
     }
@@ -302,14 +297,35 @@ class Db {
   _mustCompact() {
     if (this._lock) return false;
 
-    return this.counter === 0 || this._counter > 10000 ? true : false;
-  }
-
-  _clone(el) {
-    return JSON.parse(JSON.stringify(el));
+    return this.counter === 0 || this._counter > 10000;
   }
 }
 
-async function sleep(millis) {
-  return new Promise((resolve) => setTimeout(resolve, millis));
+/**
+ * Connect to a database
+ * @param {String} filePath absolute or relative path to db. If not exists, create file
+ * @returns {Db}
+ */
+async function connect(filePath) {
+  let db = dbs[filePath];
+  if (!db) {
+    const realPath = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
+    db = new Db(realPath);
+    await db.load();
+  } else if (db.isOpen) {
+    throw new Error(`database ${filePath} is already open`);
+  }
+  return db;
 }
+
+async function disconnect(db) {
+  const pos = dbs.indexOf(db._filePath);
+  dbs.splice(pos, 1);
+  await db._destroy();
+  db = null;
+}
+
+module.exports = {
+  connect,
+  disconnect,
+};

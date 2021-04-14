@@ -1,21 +1,25 @@
-const path = require("path");
-const fastify = require("fastify")({
+/* eslint-disable no-console */
+/* eslint-disable no-unused-vars */
+
+const path = require('path');
+const fastify = require('fastify')({
   logger: {
     prettyPrint: true,
   },
 });
 
-fastify.register(require("fastify-routes"));
+fastify.register(require('fastify-routes'));
 
 // 给自己定义的插件传递object参数，可以传给包装的函数
-fastify.register(require("./fastify-jsondb"), {
-  url: path.resolve("./cmdb.jdb"),
+fastify.register(require('./fastify-jsondb'), {
+  url: path.resolve('./cmdb.jdb'),
 });
 
-fastify.register(require("./routes/index"));
-fastify.register(require("./routes/proxy/gobetween"), { prefix: "/proxy" });
+fastify.register(require('./routes/index'));
+fastify.register(require('./routes/proxy/gobetween'), { prefix: '/proxy' });
+fastify.register(require('./routes/process/index'), { prefix: '/process' });
 
-fastify.listen(3000, "0.0.0.0", (err, address) => {
+fastify.listen(3000, '0.0.0.0', (err, address) => {
   if (err) {
     fastify.log.error(err);
     process.exit(1);

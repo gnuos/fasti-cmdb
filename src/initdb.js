@@ -1,27 +1,26 @@
-const fs = require("fs");
-const path = require("path");
+/* eslint-disable no-console */
+const fs = require('fs');
+const path = require('path');
 
-const db = require("./database");
+const db = require('./database');
 
 async function saveMetadata() {
-  var config = {};
+  let config = {};
 
-  fs.readFile(path.resolve("./gobetween.json"), "utf-8", (err, data) => {
+  fs.readFile(path.resolve('./gobetween.json'), 'utf-8', (err, data) => {
     if (err) {
       throw err;
     }
-    try {
-      // 以id作为数据库的索引加载配置
-      config = { id: "gobetween", conf: JSON.parse(data) };
-    } catch (e) {
-      throw e;
-    }
+
+    const conf = JSON.parse(data);
+    // 以id作为数据库的索引加载配置
+    config = { id: 'gobetween', conf };
   });
 
-  const dbPath = path.resolve("./cmdb.jdb");
+  const dbPath = path.resolve('./cmdb.jdb');
 
   if (!fs.existsSync(dbPath)) {
-    await fs.writeFile(dbPath, "", (err) => {
+    await fs.writeFile(dbPath, '', (err) => {
       if (err) throw err;
     });
   }
